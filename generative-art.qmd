@@ -1,0 +1,360 @@
+---
+title: "Generative Art"
+author: "Hannah Pawig"
+format:
+  html:
+    embed-resources: true
+    echo: true
+    code-fold: show
+    warning: false
+    message: false
+    toc: true
+    toc-location: left
+    toc-title: "Document Sections"
+---
+
+```{r}
+#| label: packages
+#| message: false
+
+library(tidyverse)
+library(scales)
+```
+
+
+```{r}
+#| label: generative-data
+
+# generative dataframe (polar)
+# similar to workshop materials, but changed parameters a bit
+set.seed(4809573)
+n <- 100
+dat <- tibble(
+  x0 = runif(n),
+  y0 = runif(n),
+  x1 = x0 + runif(n, min = -.5, max = .5),
+  y1 = y0 + runif(n, min = -.5, max = .5),
+  shade = runif(n),  # for random colors
+  size = runif(n)    # for random linewidths
+)
+```
+
+
+# Piece 1
+```{r}
+#| label: first-plot
+dat |> 
+  ggplot(aes(
+    x = x0,
+    y = y0,
+    xend = x1,
+    yend = y1,
+    colour = shade,
+    linewidth = size
+  )) +
+  geom_segment(show.legend = FALSE) +
+  coord_polar() +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0)) + 
+  scale_color_viridis_c() + 
+  scale_size(range = c(0, 10)) + 
+  theme_void()
+```
+
+
+
+
+
+
+
+
+
+
+# Piece 2
+
+First, we'll load in some customized plotting functions
+
+
+
+```{r}
+
+polar_art <- function(seed, n, palette) {
+  
+  # set the state of the random number generator
+  set.seed(seed)
+  
+  # data frame containing random values for 
+  # aesthetics we might want to use in the art
+  dat <- tibble(
+    x0 = runif(n),
+    y0 = runif(n),
+    x1 = x0 - runif(n, min = -.3, max = .3),
+    y1 = y0 +- runif(n, min = -.4, max = .4),
+    shade = runif(n), 
+    size = runif(n)
+  )
+  
+  # plot segments in various colours, using 
+  # polar coordinates and a gradient palette
+  dat |> 
+    ggplot(aes(
+      x = x0,
+      y = y0,
+      xend = x1,
+      yend = y1,
+      colour = shade,
+      size = size
+    )) +
+    geom_segment(show.legend = FALSE) +
+    coord_polar() +
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_colour_gradientn(colours = palette) + 
+    scale_size(range = c(0, 10)) + 
+    theme_void()
+}
+
+```
+
+
+```{r}
+#| label: my-random-pal-gen
+
+my_pal_generator <- function(seed = NULL, n) {
+  if(!is.null(seed)) set.seed(seed)
+  sample(colours(distinct = TRUE), size = n, replace = FALSE)
+}
+gen_pal <- my_pal_generator(seed = 7, n = 4)
+show_col(gen_pal)
+
+
+seed <- 1
+polar_art(seed, n = 100, palette = my_pal_generator(seed, 20))
+```
+
+
+
+```{r}
+#| label: styled-plot-func-def
+polar_styled_plot <- function(data = NULL, palette) {
+  ggplot(
+    data = data,
+    mapping = aes(
+      x = x0,
+      y = y0,
+      xend = x1,
+      yend = y1,
+      colour = shade,
+      size = size
+    )) + 
+    coord_polar(clip = "off") +
+    scale_y_continuous(
+      expand = c(0, 0),
+      limits = c(0, 1), 
+      oob = scales::oob_keep
+    ) +
+    scale_x_continuous(
+      expand = c(0, 0), 
+      limits = c(0, 1), 
+      oob = scales::oob_keep
+    ) + 
+    scale_colour_gradientn(colours = palette) + 
+    scale_size(range = c(0, 10)) + 
+    theme_void() + 
+    guides(
+      colour = guide_none(),
+      size = guide_none(),
+      fill = guide_none(),
+      shape = guide_none()
+    )
+}
+```
+## Shading Tricks Functions
+
+```{r}
+#| label: shading-tricks-packages
+#| message: false
+# To install the latest version of rayshader from Github:
+# install.packages("devtools")
+# devtools::install_github(repo = "https://github.com/tylermorganwall/rayshader.git")
+library(rayshader)
+library(tibble)
+library(ambient)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(tictoc)
+library(dplyr)
+```
+
+Simplex Noise Function
+- the purpose of this function is to give us a noise function that we can use to generate *textures*!
+- the inputted values are `x` and `y` coordinates, a `frequency` for the noise, and the number of `octaves` to use in the noise generation.
+- The noise is discontinuous offsets of the x and y coordinates, which are then those textures in the image
+
+```{r}
+#| label: simplex-noise-func-def
+
+simplex_noise <- function(x, y, frequency = .1, octaves = 10) {
+  fracture(
+    noise = gen_simplex,
+    fractal = ridged,
+    octaves = octaves,
+    frequency = frequency,
+    x = x,
+    y = y
+  ) |>
+    normalise()
+}
+```
+
+
+Ridge Art Function
+```{r}
+#| label: ridge-art-func-def
+ridge_art <- function(seed = NULL, pixels = 2000) {
+  
+  if(!is.null(seed)) set.seed(seed)
+  long_grid(
+    x = seq(from = 0, to = 1, length.out = pixels),
+    y = seq(from = 0, to = 1, length.out = pixels)
+  ) |> 
+    mutate(
+      paint = fracture(
+        x = x, 
+        y = y,
+        noise = gen_simplex,
+        fractal = ridged,
+        octaves = 8,
+        frequency = 10,
+        seed = seed
+      ),
+      paint = normalise(paint)
+    ) |>
+    as.array(value = paint)
+}
+```
+
+
+```{r}
+#| label: transform-to-curl-space-func-def
+
+transform_to_curl_space <- function(x, y, frequency = 1, octaves = 10) {
+  curl_noise(
+    generator = fracture,
+    noise = gen_simplex,
+    fractal = fbm,
+    octaves = octaves,
+    frequency = frequency,
+    x = x,
+    y = y
+  )
+}
+```
+
+
+Worley call function
+```{r}
+define_worley_cells <- function(x, y, frequency = 3, octaves = 6) {
+  fracture(
+    noise = gen_worley,
+    fractal = billow,
+    octaves = octaves,
+    frequency = frequency,
+    value = "cell",
+    x = x,
+    y = y
+  ) |>
+    rank() |> 
+    normalise()
+}
+```
+
+
+
+Shaded ice floe function
+- Ice floes are pieces that "have a jagged, fractured geometric look to them" according to 
+```{r}
+#| label: shaded-ice-floe-func-def
+
+ice_floe <- function(seed) {
+  
+  set.seed(seed)
+  
+  grid <- long_grid(
+    x = seq(0, 1, length.out = 2000),
+    y = seq(0, 1, length.out = 2000)
+  )
+  
+  coords <- transform_to_curl_space(grid$x, grid$y,
+                                    frequency = 2, octaves = 2)
+  
+  grid |>
+    mutate(
+      cells = define_worley_cells(coords$x, coords$y,
+                                  frequency = 5,
+                                  octaves = 7),
+      paint = simplex_noise(x + cells, y + cells),
+      paint = normalise(paint)
+    ) |>
+    as.array(value = paint)
+}
+```
+
+
+
+
+
+
+
+- Generate random palette of *n* colors given some manually created palette
+  - I am creating a palette using colors from the 2 dune poster files in my repo
+  - I used <https://imagecolorpicker.com> to get the HEX codes for the palette!
+```{r}
+#| label: my-pal-generator-funcs
+# my desired palette, us
+dune_pal <- c("#7c593a",
+         # from poster 2
+         "#fbcf73","#f6911f", "#b17c43", "#8d572a")
+
+
+dune_pal_generator <- function(seed = NULL, n, pal) {
+  if(!is.null(seed)) set.seed(seed)
+  
+  pal_fn <- colorRampPalette(pal)
+  pal_fn(n)
+}
+```
+
+
+
+
+
+Here's the plot, using [shading tricks](https://art-from-code.netlify.app/day-1/session-4/).
+
+```{r}
+#| label: my-styled-plot
+shaded_ice_floe <- function(seed) {
+  
+  art <- ice_floe(seed)
+  
+  height_shade(
+    heightmap = art,
+    texture = dune_pal_generator(seed, pal = dune_pal, n = 256) # use my dune pal
+  ) |>
+    add_shadow(
+      shadowmap = ray_shade(
+        heightmap = art, 
+        sunaltitude = 20, 
+        sunangle = 100,
+        multicore = TRUE, 
+        zscale = .01
+      ), 
+      max_darken = .075
+    ) |>
+    plot_map()
+}
+
+shaded_ice_floe(892)
+```
+
