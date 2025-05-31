@@ -11,6 +11,7 @@ format:
     toc: true
     toc-location: left
     toc-title: "Document Sections"
+    callout-appearance: simple
 ---
 
 ```{r}
@@ -27,7 +28,7 @@ library(scales)
 
 # generative dataframe (polar)
 # similar to workshop materials, but changed parameters a bit
-set.seed(4809573)
+set.seed(2538)
 n <- 100
 dat <- tibble(
   x0 = runif(n),
@@ -40,33 +41,91 @@ dat <- tibble(
 ```
 
 
-# Piece 1
 ```{r}
-#| label: first-plot
-dat |> 
-  ggplot(aes(
-    x = x0,
-    y = y0,
-    xend = x1,
-    yend = y1,
-    colour = shade,
-    linewidth = size
-  )) +
-  geom_segment(show.legend = FALSE) +
-  coord_polar() +
-  scale_y_continuous(expand = c(0, 0)) +
-  scale_x_continuous(expand = c(0, 0)) + 
-  scale_color_viridis_c() + 
-  scale_size(range = c(0, 10)) + 
-  theme_void()
+#| label: my-random-pal-gen
+
+my_pal_generator <- function(seed = NULL, n) {
+  if(!is.null(seed)) set.seed(seed)
+  sample(colours(distinct = TRUE), size = n, replace = FALSE)
+}
+gen_pal <- my_pal_generator(seed = 7, n = 4)
+show_col(gen_pal) # displays the color palette
+
+
+
 ```
 
 
+```{r}
+ # Sample from Canva palettes, code is from workshop materials
+sample_canva <- function(seed = NULL) {
+  if(!is.null(seed)) set.seed(seed)
+  sample(ggthemes::canva_palettes, 1)[[1]]
+}
+pal <- sample_canva(seed = 233)
+show_col(pal) # displays the Canva color palette
+
+```
+```{r}
+#| label: styled-plot-func-def
+polar_styled_plot <- function(data = NULL, palette) {
+  ggplot(
+    data = data,
+    mapping = aes(
+      x = x0,
+      y = y0,
+      xend = x1,
+      yend = y1,
+      colour = shade,
+      size = size
+    )) + 
+    coord_polar(clip = "off") +
+    scale_y_continuous(
+      expand = c(0, 0),
+      limits = c(0, 1), 
+      oob = scales::oob_keep
+    ) +
+    scale_x_continuous(
+      expand = c(0, 0), 
+      limits = c(0, 1), 
+      oob = scales::oob_keep
+    ) + 
+    scale_colour_gradientn(colours = palette) + 
+    scale_size(range = c(0, 10)) + 
+    theme_void() + 
+    guides(
+      colour = guide_none(),
+      size = guide_none(),
+      fill = guide_none(),
+      shape = guide_none()
+    )
+}
+```
 
 
+# Piece 1
+```{r}
+#| label: first-plot
+
+polar_styled_plot(palette = sample_canva(seed = 2461)) + 
+  geom_segment(data = dat) + 
+  geom_segment(data = dat |> mutate(y1 = y1 - .4, y0 = y0 - 0.4)) +
+  geom_segment(data = dat |> mutate(y1 = y1 - .3, y0 = y0 - .3)) +
+  geom_segment(data = dat |> mutate(y1 = y1 * 1.75, y0 = y0 * 1.75)) 
+```
 
 
+::: {.callout-note icon=false}
 
+## Exhibit: "Tropical Blooming Vortex"
+
+- Inspired by the colors of a tropical sunset, this piece shows endless segments of concentric circles that look like a color-filled vortex.
+
+  - Adding three extra segment layers that are slightly modified from the original random data used to create the first segment layer, the pattern is overlayed onto itself to give a vortex-like appearance. Using random values and operations (multiplication, addition, subtraction) for modification of `y1` and `y0` (randomly generated from a uniform distribution) 
+to each segment layer provides endless possibilities
+to the vortex's appearance, and the use of this specific gradient color palette from Canva gives a tropical flair.
+
+:::
 
 
 
@@ -117,58 +176,9 @@ polar_art <- function(seed, n, palette) {
 ```
 
 
-```{r}
-#| label: my-random-pal-gen
-
-my_pal_generator <- function(seed = NULL, n) {
-  if(!is.null(seed)) set.seed(seed)
-  sample(colours(distinct = TRUE), size = n, replace = FALSE)
-}
-gen_pal <- my_pal_generator(seed = 7, n = 4)
-show_col(gen_pal)
-
-
-seed <- 1
-polar_art(seed, n = 100, palette = my_pal_generator(seed, 20))
-```
 
 
 
-```{r}
-#| label: styled-plot-func-def
-polar_styled_plot <- function(data = NULL, palette) {
-  ggplot(
-    data = data,
-    mapping = aes(
-      x = x0,
-      y = y0,
-      xend = x1,
-      yend = y1,
-      colour = shade,
-      size = size
-    )) + 
-    coord_polar(clip = "off") +
-    scale_y_continuous(
-      expand = c(0, 0),
-      limits = c(0, 1), 
-      oob = scales::oob_keep
-    ) +
-    scale_x_continuous(
-      expand = c(0, 0), 
-      limits = c(0, 1), 
-      oob = scales::oob_keep
-    ) + 
-    scale_colour_gradientn(colours = palette) + 
-    scale_size(range = c(0, 10)) + 
-    theme_void() + 
-    guides(
-      colour = guide_none(),
-      size = guide_none(),
-      fill = guide_none(),
-      shape = guide_none()
-    )
-}
-```
 ## Shading Tricks Functions
 
 ```{r}
@@ -358,3 +368,66 @@ shaded_ice_floe <- function(seed) {
 shaded_ice_floe(892)
 ```
 
+- 3D Ice Floe
+
+```{r}
+dune_texture <- create_texture(
+  lightcolor = "#e0c16c",
+  shadowcolor = "#7d2a06",
+  leftcolor = "#e6cf78",
+  rightcolor = "#cc9129",
+  centercolor = "#e0c872"
+)
+
+
+seed <- 13239587
+
+ice_height <- matrix(0, 2500, 2500) # a matrix of elevations
+ice_height[251:2250, 251:2250] <- ice_floe(seed)
+
+ice_scape <- sphere_shade(
+  heightmap = ice_height,
+  texture = dune_texture # my custom color scale
+) |>
+  add_shadow(
+    shadowmap = ray_shade(
+      heightmap = ice_height,
+      sunaltitude = 30,
+      sunangle = 90,
+      multicore = TRUE,
+      zscale = .005
+    ),
+    max_darken = .15
+  )
+
+plot_3d(
+  hillshade = ice_scape,
+  heightmap = ice_height,
+  theta = 45,
+  phi = 30,
+  zoom = .75,
+  zscale = .001,
+  background = "#222222",
+  shadow = FALSE,
+  soliddepth = .5,
+  solidcolor = "#222222",
+  windowsize = c(2500, 1500)
+)
+
+render_snapshot(
+  filename = here::here("images","exhibit2.png"), 
+  clear = TRUE
+)
+
+knitr::include_graphics(here::here("images","exhibit2.png"))
+```
+::: {.callout-note icon=false}
+
+
+## Exhibit: **"City of Sand-Scrapers"**
+- Initially inspired by the colors of Arrakis in the Dune movie,  Reminiscent of sand's interactions with magnets, this piece appears to appear as a large city with sand-scrapers (sky-scrapers made of sand), in a 3D format.
+  - The image was created using the `rayshader` package and the `ice_floe` function we defined earlier. This 3D portrait was able to become 3D by the use of the `sphere_shade` function which creates a color map for the image, the `add_shadow` function which adds shadows to the image given the sun angles, and the `plot_3d` function which plots the 3D image. The use of a custom color palette created from the colors of the Dune movie poster gives this piece a unique flair. The heights of the sand skyscrapers were created by initializing a matrix of elevations, and generating a random "ice floe" using the `ice_floe` system (jagged, geometric-styled plots).
+
+
+
+:::
