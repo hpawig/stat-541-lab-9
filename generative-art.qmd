@@ -44,6 +44,7 @@ dat <- tibble(
 ```{r}
 #| label: my-random-pal-gen
 
+# This function generates a palette of n random distinct colors
 my_pal_generator <- function(seed = NULL, n) {
   if(!is.null(seed)) set.seed(seed)
   sample(colours(distinct = TRUE), size = n, replace = FALSE)
@@ -68,6 +69,9 @@ show_col(pal) # displays the Canva color palette
 ```
 ```{r}
 #| label: styled-plot-func-def
+
+# Function to create a polar-styled plot with ggplot, user just needs plotting data and a palette
+# is the "ggplot base" and then you can add geoms after using this function
 polar_styled_plot <- function(data = NULL, palette) {
   ggplot(
     data = data,
@@ -76,7 +80,7 @@ polar_styled_plot <- function(data = NULL, palette) {
       y = y0,
       xend = x1,
       yend = y1,
-      colour = shade,
+      colour = shade, 
       size = size
     )) + 
     coord_polar(clip = "off") +
@@ -198,13 +202,15 @@ library(dplyr)
 ```
 
 Simplex Noise Function
-- the purpose of this function is to give us a noise function that we can use to generate *textures*!
-- the inputted values are `x` and `y` coordinates, a `frequency` for the noise, and the number of `octaves` to use in the noise generation.
-- The noise is discontinuous offsets of the x and y coordinates, which are then those textures in the image
+
 
 ```{r}
 #| label: simplex-noise-func-def
+# the purpose of this function is to give us a noise function that we can use to generate *textures*!
 
+# the inputted values are `x` and `y` coordinates, a `frequency` for the noise, and the number of `octaves` to use in the noise generation.
+
+# The noise is discontinuous offsets of the x and y coordinates, which are then those textures in the image
 simplex_noise <- function(x, y, frequency = .1, octaves = 10) {
   fracture(
     noise = gen_simplex,
@@ -219,36 +225,12 @@ simplex_noise <- function(x, y, frequency = .1, octaves = 10) {
 ```
 
 
-Ridge Art Function
-```{r}
-#| label: ridge-art-func-def
-ridge_art <- function(seed = NULL, pixels = 2000) {
-  
-  if(!is.null(seed)) set.seed(seed)
-  long_grid(
-    x = seq(from = 0, to = 1, length.out = pixels),
-    y = seq(from = 0, to = 1, length.out = pixels)
-  ) |> 
-    mutate(
-      paint = fracture(
-        x = x, 
-        y = y,
-        noise = gen_simplex,
-        fractal = ridged,
-        octaves = 8,
-        frequency = 10,
-        seed = seed
-      ),
-      paint = normalise(paint)
-    ) |>
-    as.array(value = paint)
-}
-```
-
 
 ```{r}
 #| label: transform-to-curl-space-func-def
-
+# function necessary to create curl noise
+# needed for Ice Floe system
+# an octave represents a layer of noise
 transform_to_curl_space <- function(x, y, frequency = 1, octaves = 10) {
   curl_noise(
     generator = fracture,
@@ -263,8 +245,12 @@ transform_to_curl_space <- function(x, y, frequency = 1, octaves = 10) {
 ```
 
 
-Worley call function
+Worley cell function
 ```{r}
+#| label: worley-cells-func-def
+
+# frequency = number of points/cells that the function uses to create noise
+# octave = number of layers of noise desired
 define_worley_cells <- function(x, y, frequency = 3, octaves = 6) {
   fracture(
     noise = gen_worley,
@@ -283,7 +269,7 @@ define_worley_cells <- function(x, y, frequency = 3, octaves = 6) {
 
 
 Shaded ice floe function
-- Ice floes are pieces that "have a jagged, fractured geometric look to them" according to 
+- Ice floes are pieces that "have a jagged, fractured geometric look to them" according to the workshop materials.
 ```{r}
 #| label: shaded-ice-floe-func-def
 
@@ -291,14 +277,15 @@ ice_floe <- function(seed) {
   
   set.seed(seed)
   
+  # create a grid of points in the unit square
   grid <- long_grid(
     x = seq(0, 1, length.out = 2000),
     y = seq(0, 1, length.out = 2000)
   )
-  
+  # create curl texture
   coords <- transform_to_curl_space(grid$x, grid$y,
                                     frequency = 2, octaves = 2)
-  
+  # create worley noise and output as array
   grid |>
     mutate(
       cells = define_worley_cells(coords$x, coords$y,
@@ -308,6 +295,7 @@ ice_floe <- function(seed) {
       paint = normalise(paint)
     ) |>
     as.array(value = paint)
+  
 }
 ```
 
@@ -327,7 +315,7 @@ dune_pal <- c("#7c593a",
          # from poster 2
          "#fbcf73","#f6911f", "#b17c43", "#8d572a")
 
-
+# Create a dune-color based gradient palette
 dune_pal_generator <- function(seed = NULL, n, pal) {
   if(!is.null(seed)) set.seed(seed)
   
@@ -346,12 +334,13 @@ Here's the plot, using [shading tricks](https://art-from-code.netlify.app/day-1/
 #| label: my-styled-plot
 shaded_ice_floe <- function(seed) {
   
-  art <- ice_floe(seed)
+  art <- ice_floe(seed) # create ice floe texture
   
   height_shade(
-    heightmap = art,
+    heightmap = art, # heights created by ice floe
     texture = dune_pal_generator(seed, pal = dune_pal, n = 256) # use my dune pal
   ) |>
+    # adding shadow using ice floe
     add_shadow(
       shadowmap = ray_shade(
         heightmap = art, 
@@ -399,7 +388,7 @@ ice_scape <- sphere_shade(
     ),
     max_darken = .15
   )
-
+# create 3d version with ice_floe shading and elevation matrix
 plot_3d(
   hillshade = ice_scape,
   heightmap = ice_height,
@@ -414,11 +403,13 @@ plot_3d(
   windowsize = c(2500, 1500)
 )
 
+# create png of 3D image
 render_snapshot(
   filename = here::here("images","exhibit2.png"), 
   clear = TRUE
 )
 
+# display png
 knitr::include_graphics(here::here("images","exhibit2.png"))
 ```
 ::: {.callout-note icon=false}
